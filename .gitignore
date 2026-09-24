@@ -1,0 +1,11 @@
+node_modules/
+test-results/
+playwright-report/
+.blob/
+*.log
+.DS_Store
+SAMPLE/work/
+.env
+.env.*
+*.pem
+*.token

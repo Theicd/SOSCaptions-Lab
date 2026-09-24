@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a0f" />
+  <title>SOS Captions Lab — Phase 3 Multilang</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "@huggingface/transformers": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.0/dist/transformers.web.js",
+      "onnxruntime-web": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/dist/ort.bundle.min.mjs",
+      "onnxruntime-web/webgpu": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/dist/ort.webgpu.bundle.min.mjs",
+      "onnxruntime-common": "https://cdn.jsdelivr.net/npm/onnxruntime-common@1.30.0/dist/esm/index.js"
+    }
+  }
+  </script>
+</head>
+<body>
+<header class="app-bar" hidden aria-hidden="true">
+    <button
+      type="button"
+      class="ready-dot"
+      id="readyDot"
+      data-state="booting"
+      data-testid="ready-dot"
+      title="טוען ממשק…"
+      aria-label="סטטוס מוכנות ממשק"
+    ></button>
+    <div class="brand">
+      <h1>SOS Captions Lab</h1>
+      <span class="tag" id="readyLabel" data-testid="ready-label">מכין מודל…</span>
+    </div>
+    <span class="badge" id="phaseBadge">WHISPER</span>
+  </header>
+
+  <main class="stage-wrap">
+    <!-- Desktop: fixed to screen top-left. Mobile: floats over stage. -->
+    <div class="ready-cluster" data-testid="ready-cluster" id="readyCluster">
+      <span
+        class="ready-dot ready-dot-float"
+        id="readyDotFloat"
+        data-state="booting"
+        data-testid="ready-dot-float"
+        title="סטטוס"
+        aria-label="סטטוס מוכנות"
+      ></span>
+      <span class="ready-progress" id="readyProgress" data-testid="ready-progress" hidden>0%</span>
+      <span class="ready-timer" id="readyTimer" data-testid="ready-timer" hidden>0:00</span>
+      <span class="ready-hint" id="readyHint" data-testid="ready-hint" hidden>מאתחל…</span>
+    </div>
+
+    <section class="player-column" aria-label="נגן">
+      <div class="phone-frame cap-style-classic" id="phoneFrame">
+        <div class="video-layer">
+          <video id="video" playsinline webkit-playsinline preload="metadata"></video>
+        </div>
+
+        <!-- TikTok-style floating top: actions centered (status is outside video) -->
+        <div class="float-top" id="floatTop" data-testid="float-top">
+          <div class="float-top-actions" data-testid="float-top-actions">
+            <button type="button" class="float-btn" id="btnFloatUpload" data-testid="btn-float-upload" title="העלה" aria-label="העלה">⬆</button>
+            <button type="button" class="float-btn" id="btnFloatSamples" data-testid="btn-float-samples" title="דוגמאות" aria-label="סרטוני דוגמה">T▾</button>
+            <button type="button" class="float-btn" id="btnFloatTranscribe" data-testid="btn-float-transcribe" title="תמלל" disabled>🎤</button>
+            <button type="button" class="float-btn float-btn-aa" id="btnOpenStyle" data-testid="btn-open-style" title="עיצוב טקסט" aria-label="עיצוב טקסט">Aa</button>
+            <button type="button" class="float-btn float-btn-edit" id="btnOpenEditor" data-testid="btn-open-editor" title="עריכה" aria-label="עריכת כתוביות">✎</button>
+          </div>
+        </div>
+
+        <div class="sample-picker" id="samplePicker" data-testid="sample-picker" hidden>
+          <button type="button" class="sample-pick" data-sample="TEST1" data-testid="sample-TEST1">TEST1</button>
+          <button type="button" class="sample-pick" data-sample="TEST2" data-testid="sample-TEST2">TEST2</button>
+          <button type="button" class="sample-pick" data-sample="TEST3" data-testid="sample-TEST3">TEST3</button>
+          <button type="button" class="sample-pick" data-sample="TEST4" data-testid="sample-TEST4">TEST4</button>
+        </div>
+
+        <div
+          class="caption-overlay"
+          id="captionOverlay"
+          data-position="bottom"
+          dir="ltr"
+          aria-live="polite"
+        >
+          <p class="caption-text empty" id="captionText" data-testid="caption-text"></p>
+        </div>
+
+        <div class="drop-hint" id="dropHint" data-testid="drop-hint">
+          <strong>העלה וידאו</strong>
+          <span>גרור · העלה · או TEST1 ואז תמלל</span>
+        </div>
+
+        <div class="float-bottom" id="floatBottom">
+          <button type="button" class="float-btn float-btn-play" id="btnPlay" data-testid="btn-play" disabled>▶</button>
+          <button type="button" class="float-btn" id="btnPause" data-testid="btn-pause" disabled>⏸</button>
+          <input type="range" class="scrub scrub-float" id="scrub" data-testid="scrub" min="0" max="0" step="0.01" value="0" disabled />
+          <span class="time-label time-float" id="timeLabel" data-testid="time-label">0:00 / 0:00</span>
+        </div>
+      </div>
+
+      <div class="transport desktop-only" hidden aria-hidden="true">
+        <label class="sr-only" for="speedSelect">מהירות</label>
+        <select class="select" id="speedSelect" data-testid="speed-select" disabled>
+          <option value="0.5">0.5×</option>
+          <option value="1" selected>1×</option>
+          <option value="1.5">1.5×</option>
+          <option value="2">2×</option>
+        </select>
+        <button type="button" class="btn btn-ghost" id="btnTest1" data-testid="btn-test1">TEST1</button>
+        <button type="button" class="btn btn-primary" id="btnTranscribe" data-testid="btn-transcribe" disabled>תמלל</button>
+        <button type="button" class="btn btn-ghost" id="btnSample" data-testid="btn-sample">דוגמה ישנה</button>
+        <button type="button" class="btn btn-ghost" id="btnUpload" data-testid="btn-upload">העלה</button>
+        <input type="file" id="fileInput" accept="video/*,audio/*" data-testid="file-input" />
+      </div>
+    </section>
+
+    <!-- Editor: languages + caption list only -->
+    <aside class="editor-column" id="editorSheet" data-testid="editor-sheet" aria-label="עריכת כתוביות">
+      <div class="editor-sheet-head">
+        <button type="button" class="float-btn editor-close" id="btnCloseEditor" data-testid="btn-close-editor" aria-label="סגור">✕</button>
+        <strong>עריכת כתוביות</strong>
+        <button type="button" class="sheet-copy-btn" id="btnCopyCaptions" data-testid="btn-copy-captions" title="העתק את כל המלל">העתק</button>
+      </div>
+
+      <div class="editor-toolbar" data-testid="editor-toolbar">
+        <div class="toolbar-block toolbar-langs">
+          <span class="toolbar-title">שפות</span>
+          <div class="toolbar-row toolbar-row-langs">
+            <label>
+              שפת אודיו
+              <select class="select" id="sourceLangSelect" data-testid="source-lang-select">
+                <option value="auto" selected>זיהוי אוטומטי</option>
+                <option value="en">English</option>
+                <option value="ru">Русский</option>
+                <option value="de">Deutsch</option>
+                <option value="he">עברית</option>
+                <option value="ar">العربية</option>
+                <option value="fr">Français</option>
+                <option value="es">Español</option>
+                <option value="uk">Українська</option>
+                <option value="it">Italiano</option>
+                <option value="pt">Português</option>
+                <option value="pl">Polski</option>
+                <option value="tr">Türkçe</option>
+                <option value="nl">Nederlands</option>
+                <option value="zh">中文</option>
+                <option value="ja">日本語</option>
+                <option value="ko">한국어</option>
+                <option value="hi">हिन्दी</option>
+              </select>
+            </label>
+            <span class="detected-pill" id="detectedLangLabel" data-testid="detected-lang" hidden>—</span>
+            <label>
+              שפת כתוביות / תרגום
+              <select class="select" id="langSelect" data-testid="lang-select">
+                <option value="en">English</option>
+                <option value="he">עברית</option>
+                <option value="ar">العربية</option>
+                <option value="ru">Русский</option>
+                <option value="es">Español</option>
+                <option value="fr">Français</option>
+                <option value="de">Deutsch</option>
+                <option value="uk">Українська</option>
+                <option value="it">Italiano</option>
+                <option value="pt">Português</option>
+                <option value="pl">Polski</option>
+                <option value="tr">Türkçe</option>
+                <option value="nl">Nederlands</option>
+                <option value="zh">中文</option>
+                <option value="ja">日本語</option>
+                <option value="ko">한국어</option>
+                <option value="hi">हिन्दी</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <p class="editor-list-hint" id="editorListHint">רשימת השורות למטה — ערוך ושמור. עיצוב/גודל ב־Aa.</p>
+      </div>
+
+      <div class="cards-scroll" id="cardsScroll" data-testid="cards-scroll"></div>
+
+      <pre class="asr-log" id="asrLog" data-testid="asr-log" hidden aria-hidden="true"></pre>
+
+      <div class="status-bar status-bar-compact">
+        <span id="statusText" data-testid="status-text">מוכן</span>
+        <span class="ok" id="activeId" data-testid="active-id" hidden>—</span>
+      </div>
+    </aside>
+  </main>
+
+  <div class="sheet-backdrop" id="sheetBackdrop" data-testid="sheet-backdrop" hidden></div>
+
+  <!-- Style picker (Aa) — compact sections -->
+  <div class="style-sheet" id="styleSheet" data-testid="style-sheet" hidden aria-label="בחירת עיצוב">
+    <div class="style-sheet-panel">
+      <div class="style-sheet-head">
+        <strong>עיצוב כתוביות</strong>
+        <button type="button" class="float-btn editor-close" id="btnCloseStyle" data-testid="btn-close-style" aria-label="סגור">✕</button>
+      </div>
+
+      <section class="sheet-section">
+        <h3 class="sheet-section-title">תצוגה מקדימה</h3>
+        <div class="size-preview-box size-preview-sheet cap-style-classic" id="sizePreviewBoxSheet" data-testid="size-preview-sheet">
+          <span class="size-preview-sample caption-text is-visible" id="sizePreviewSampleSheet">Aa דוגמה</span>
+        </div>
+      </section>
+
+      <section class="sheet-section">
+        <h3 class="sheet-section-title">גודל</h3>
+        <div class="size-chips" id="sizeChipsSheet" data-testid="size-chips-sheet" role="group" aria-label="גודל">
+          <button type="button" class="size-chip" data-size="sm">קטן</button>
+          <button type="button" class="size-chip is-active" data-size="md">בינוני</button>
+          <button type="button" class="size-chip" data-size="lg">גדול</button>
+          <button type="button" class="size-chip" data-size="xl">ענק</button>
+        </div>
+      </section>
+
+      <section class="sheet-section">
+        <h3 class="sheet-section-title">אופן הצגה</h3>
+        <div
+          class="mode-row"
+          id="displayModeToggleSheet"
+          data-testid="display-mode-toggle-sheet"
+          role="radiogroup"
+          aria-label="מצב הצגה"
+        >
+          <button type="button" class="mode-pill is-active" data-display="movie" role="radio" aria-checked="true">
+            רגיל · כמו בסרט
+          </button>
+          <button type="button" class="mode-pill" data-display="typing" role="radio" aria-checked="false">
+            הכתבה
+          </button>
+        </div>
+      </section>
+
+      <section class="sheet-section">
+        <h3 class="sheet-section-title">סגנון</h3>
+        <div class="style-pills" id="styleGrid" data-testid="style-grid" role="listbox" aria-label="סגנונות">
+          <button type="button" class="style-pill is-active" data-style="classic" role="option">Classic</button>
+          <button type="button" class="style-pill" data-style="boxed" role="option">Boxed</button>
+          <button type="button" class="style-pill" data-style="karaoke" role="option">Karaoke</button>
+          <button type="button" class="style-pill" data-style="neon" role="option">Neon</button>
+          <button type="button" class="style-pill" data-style="minimal" role="option">Minimal</button>
+        </div>
+      </section>
+
+      <section class="sheet-section">
+        <h3 class="sheet-section-title">מיקום על המסך</h3>
+        <div class="mode-row">
+          <label class="pos-label">
+            <select class="select select-full" id="posSelect" data-testid="pos-select">
+              <option value="bottom" selected>תחתון</option>
+              <option value="middle">אמצע</option>
+              <option value="top">עליון</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <button type="button" class="btn btn-ghost style-to-editor" id="btnStyleToEditor" data-testid="btn-style-to-editor">עריכת טקסט ושפות</button>
+    </div>
+  </div>
+
+  <script src="captions-policy.js"></script>
+  <script src="hf-env.js"></script>
+  <script src="mock-captions.js"></script>
+  <script src="audio-extract.js"></script>
+  <script src="captions-timing.js"></script>
+  <script src="asr-main.js"></script>
+  <script src="translate-main.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

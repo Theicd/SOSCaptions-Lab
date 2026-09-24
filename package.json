@@ -1,0 +1,21 @@
+{
+  "name": "sos-captions-lab",
+  "version": "0.2.0",
+  "private": true,
+  "description": "SOS Captions Lab — Phase 2 Whisper overlay (no burn-in, no SOS wire)",
+  "scripts": {
+    "start": "npx --yes serve -l 8899 .",
+    "test": "npx --yes playwright test",
+    "test:ui": "npx --yes playwright test --ui",
+    "test:asr": "npx --yes playwright test tests/phase2-test1-asr.spec.js",
+    "test:qa": "npx --yes playwright test tests/qa-samples-asr.spec.js --reporter=list",
+    "test:qa:translate": "npx --yes playwright test tests/qa-online-translate.spec.js tests/qa-translate-e2e.spec.js --reporter=list",
+    "gt": "node scripts/ground-truth-transcribe.mjs"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}
