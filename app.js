@@ -171,17 +171,21 @@
       el.readyTimer.textContent = fmtElapsed(elapsed);
     }
     let pct = workBasePct;
-    if (workExpectMs > 0 && workPhase === 'transcribe') {
-      const soft = workBasePct + (90 - workBasePct) * Math.min(0.95, elapsed / workExpectMs);
-      pct = soft;
-    } else if (workPhase === 'extract') {
+    if (workPhase === 'extract') {
       pct = Math.min(12, 3 + elapsed / 800);
     } else if (workPhase === 'detect') {
-      pct = Math.min(22, 14 + elapsed / 1200);
+      pct = Math.min(10, 5 + elapsed / 900);
+    } else if (workPhase === 'transcribe') {
+      // Absolute % from chunk callbacks (workBasePct). Soft ETA only as floor climb.
+      if (workExpectMs > 0) {
+        const soft = Math.min(92, workBasePct + (elapsed / workExpectMs) * 8);
+        pct = Math.max(workBasePct, soft);
+      } else {
+        pct = workBasePct;
+      }
     } else if (workPhase === 'translate') {
-      pct = Math.min(95, workBasePct + elapsed / 400);
+      pct = Math.min(95, Math.max(workBasePct, workBasePct + elapsed / 400));
     } else if (workPhase === 'download') {
-      // real % comes from onModelProgress; keep timer only
       pct = Number(el.readyProgress && el.readyProgress.getAttribute('data-pct')) || workBasePct;
     }
     if (workPhase !== 'download') {
@@ -813,7 +817,25 @@
     return window.CaptionsAsr.transcribe(audio, {
       onProgress: onAsrProgress,
       onLog: labLog,
-      sourceLang: srcSel
+      sourceLang: srcSel,
+      onChunkProgress: function (info) {
+        if (!info) return;
+        const pct = Math.max(1, Math.min(99, Math.round(Number(info.pct) || 0)));
+        const phase = info.phase === 'detect' ? 'detect' : 'transcribe';
+        workPhase = phase;
+        workBasePct = pct;
+        workExpectMs = 0;
+        setReadyState('loading');
+        if (phase === 'detect') {
+          setLoadProgress(pct, 'מזהה שפה');
+          setStatus('מזהה שפה…');
+          return;
+        }
+        const done = Math.min(Number(info.part) || 0, Number(info.total) || 0);
+        const total = Number(info.total) || 1;
+        setLoadProgress(pct, 'מתמלל ' + done + '/' + total);
+        setStatus('מתמלל… ' + pct + '% · מקטע ' + done + '/' + total);
+      }
     });
   }
 
@@ -982,7 +1004,18 @@
         sourceLang,
         next,
         {
-          onLog: labLog
+          onLog: labLog,
+          onCueProgress: function (info) {
+            if (!info) return;
+            const pct = Math.max(1, Math.min(99, Math.round(Number(info.pct) || 0)));
+            workPhase = 'translate';
+            workBasePct = pct;
+            workExpectMs = 0;
+            setLoadProgress(pct, 'מתרגם ' + (info.part || 0) + '/' + (info.total || '?'));
+            setStatus(
+              'מתרגם… ' + pct + '% · ' + (info.part || 0) + '/' + (info.total || '?') + ' → ' + next
+            );
+          }
         }
       );
       const mediaDur = el.video.duration || 0;

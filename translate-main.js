@@ -192,6 +192,10 @@
     const out = [];
     for (let i = 0; i < (cues || []).length; i++) {
       const c = cues[i];
+      const pct = Math.round(10 + (i / Math.max(1, cues.length)) * 85);
+      if (hooks && hooks.onCueProgress) {
+        hooks.onCueProgress({ part: i, total: cues.length, pct: pct });
+      }
       hooks &&
         hooks.onLog &&
         hooks.onLog('translate cue ' + (i + 1) + '/' + cues.length);
@@ -205,6 +209,13 @@
         words: words,
         manual: false
       });
+      if (hooks && hooks.onCueProgress) {
+        hooks.onCueProgress({
+          part: i + 1,
+          total: cues.length,
+          pct: Math.min(96, Math.round(10 + ((i + 1) / Math.max(1, cues.length)) * 85))
+        });
+      }
       // Soft rate-limit for free endpoints
       if (i + 1 < cues.length) {
         await new Promise(function (r) {

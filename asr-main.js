@@ -240,8 +240,30 @@
   }
 
   /**
+   * Yield so the UI (progress %) can paint between heavy WASM chunks.
+   * Whisper otherwise blocks the main thread for the whole file → stuck at ~5%.
+   */
+  function yieldToUi() {
+    return new Promise(function (resolve) {
+      setTimeout(resolve, 0);
+    });
+  }
+
+  function shiftChunks(chunks, offsetSec) {
+    return (chunks || []).map(function (c) {
+      const ts = c && c.timestamp ? c.timestamp : [0, 0];
+      const a = Number(ts[0]) || 0;
+      const b = ts[1] == null ? a : Number(ts[1]) || a;
+      return {
+        text: c.text,
+        timestamp: [a + offsetSec, b + offsetSec]
+      };
+    });
+  }
+
+  /**
    * @param {Float32Array} audio
-   * @param {{onProgress?:Function,onLog?:Function,sourceLang?:string}} hooks
+   * @param {{onProgress?:Function,onLog?:Function,onChunkProgress?:Function,sourceLang?:string}} hooks
    */
   async function transcribe(audio, hooks) {
     const asr = await ensurePipeline(hooks && hooks.onProgress, hooks && hooks.onLog);
@@ -249,8 +271,13 @@
     let detected = null;
 
     if (!sourceApp || sourceApp === 'auto') {
+      if (hooks && hooks.onChunkProgress) {
+        hooks.onChunkProgress({ phase: 'detect', part: 0, total: 1, pct: 6 });
+      }
+      await yieldToUi();
       detected = await detectLanguage(audio, hooks);
       sourceApp = detected.appCode;
+      await yieldToUi();
     }
 
     const whisperLang = resolveWhisperLanguage(sourceApp) || detected && detected.whisperCode || sourceApp;
@@ -258,18 +285,68 @@
       hooks.onLog &&
       hooks.onLog('main: transcribing frames=' + audio.length + ' lang=' + whisperLang);
 
-    const result = await asr(audio, {
-      return_timestamps: 'word',
-      chunk_length_s: 30,
-      stride_length_s: 5,
-      task: 'transcribe',
-      language: whisperLang
-    });
+    const SR = 16000;
+    // Short slices so progress can update between WASM blocks on the main thread.
+    const CHUNK_S = 12;
+    const chunkSamples = CHUNK_S * SR;
+    const totalParts = Math.max(1, Math.ceil(audio.length / chunkSamples));
+    const allChunks = [];
+    const textParts = [];
 
-    // SubVid-compatible: consumers read output.language (2-letter) via normalizeLanguageCode
-    result.detected_language = sourceApp;
-    result.detected_whisper = whisperLang;
-    result.language = sourceApp;
+    for (let part = 0; part < totalParts; part++) {
+      const offset = part * chunkSamples;
+      const end = Math.min(audio.length, offset + chunkSamples);
+      const slice = audio.subarray(offset, end);
+      const offsetSec = offset / SR;
+      const pct = Math.round(8 + (part / totalParts) * 86);
+
+      if (hooks && hooks.onChunkProgress) {
+        hooks.onChunkProgress({
+          phase: 'transcribe',
+          part: part,
+          total: totalParts,
+          pct: pct
+        });
+      }
+      await yieldToUi();
+
+      hooks &&
+        hooks.onLog &&
+        hooks.onLog(
+          'main: chunk ' + (part + 1) + '/' + totalParts + ' samples=' + slice.length
+        );
+
+      const partial = await asr(slice, {
+        return_timestamps: 'word',
+        chunk_length_s: 30,
+        stride_length_s: 5,
+        task: 'transcribe',
+        language: whisperLang
+      });
+
+      const shifted = shiftChunks(partial && partial.chunks, offsetSec);
+      for (let i = 0; i < shifted.length; i++) allChunks.push(shifted[i]);
+      if (partial && partial.text) textParts.push(String(partial.text).trim());
+
+      const donePct = Math.round(8 + ((part + 1) / totalParts) * 86);
+      if (hooks && hooks.onChunkProgress) {
+        hooks.onChunkProgress({
+          phase: 'transcribe',
+          part: part + 1,
+          total: totalParts,
+          pct: Math.min(96, donePct)
+        });
+      }
+      await yieldToUi();
+    }
+
+    const result = {
+      text: textParts.filter(Boolean).join(' ').trim(),
+      chunks: allChunks,
+      detected_language: sourceApp,
+      detected_whisper: whisperLang,
+      language: sourceApp
+    };
     return result;
   }
 

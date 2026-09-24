@@ -1,5 +1,5 @@
 /* Lab shell SW — network-first for app code so ASR fixes are not stuck stale. */
-const CACHE = 'sos-captions-lab-shell-v5';
+const CACHE = 'sos-captions-lab-shell-v6';
 const PRECACHE = [
   './',
   './index.html',
