@@ -7,7 +7,7 @@ test.describe('Phase 3 translation switch', () => {
     const p = await page.evaluate(() => window.CaptionsPolicy);
     expect(p.phase).toBe(3);
     expect(p.nllbEnabled).toBe(false);
-    expect(p.whisperModel).toContain('whisper-base');
+    expect(p.whisperModel).toContain('whisper-tiny');
     expect(p.whisperModel).not.toContain('.en');
     expect(p.nllbCodes.he).toBe('heb_Hebr');
     expect(p.nllbCodes.ru).toBe('rus_Cyrl');
