@@ -171,18 +171,15 @@
       el.readyTimer.textContent = fmtElapsed(elapsed);
     }
     let pct = workBasePct;
+    let indeterminate = false;
     if (workPhase === 'extract') {
       pct = Math.min(12, 3 + elapsed / 800);
     } else if (workPhase === 'detect') {
-      pct = Math.min(10, 5 + elapsed / 900);
+      pct = Math.min(18, 12 + elapsed / 900);
     } else if (workPhase === 'transcribe') {
-      // Absolute % from chunk callbacks (workBasePct). Soft ETA only as floor climb.
-      if (workExpectMs > 0) {
-        const soft = Math.min(92, workBasePct + (elapsed / workExpectMs) * 8);
-        pct = Math.max(workBasePct, soft);
-      } else {
-        pct = workBasePct;
-      }
+      // Main-thread Whisper blocks timers — don't fake stuck %; show busy dial.
+      indeterminate = true;
+      pct = workBasePct || 15;
     } else if (workPhase === 'translate') {
       pct = Math.min(95, Math.max(workBasePct, workBasePct + elapsed / 400));
     } else if (workPhase === 'download') {
@@ -191,12 +188,23 @@
     if (workPhase !== 'download') {
       if (el.readyProgress) {
         el.readyProgress.hidden = false;
-        const n = Math.max(1, Math.min(99, Math.round(pct)));
-        el.readyProgress.textContent = n + '%';
-        el.readyProgress.setAttribute('data-pct', String(n));
+        if (indeterminate) {
+          el.readyProgress.textContent = '…';
+          el.readyProgress.setAttribute('data-pct', 'busy');
+        } else {
+          const n = Math.max(1, Math.min(99, Math.round(pct)));
+          el.readyProgress.textContent = n + '%';
+          el.readyProgress.setAttribute('data-pct', String(n));
+        }
       }
       if (el.readyDotFloat) {
-        el.readyDotFloat.style.setProperty('--pct', String(Math.max(1, Math.min(99, Math.round(pct)))));
+        if (indeterminate) {
+          el.readyDotFloat.setAttribute('data-busy', '1');
+          el.readyDotFloat.style.removeProperty('--pct');
+        } else {
+          el.readyDotFloat.removeAttribute('data-busy');
+          el.readyDotFloat.style.setProperty('--pct', String(Math.max(1, Math.min(99, Math.round(pct)))));
+        }
       }
     }
     if (el.readyHint && workPhase) {
@@ -261,9 +269,11 @@
         if (dot === el.readyDotFloat) {
           dot.title = 'מוכן';
           dot.style.removeProperty('--pct');
+          dot.removeAttribute('data-busy');
         }
       } else if (state === 'error') {
         dot.textContent = '!';
+        if (dot === el.readyDotFloat) dot.removeAttribute('data-busy');
       } else {
         dot.textContent = '';
       }
@@ -817,25 +827,7 @@
     return window.CaptionsAsr.transcribe(audio, {
       onProgress: onAsrProgress,
       onLog: labLog,
-      sourceLang: srcSel,
-      onChunkProgress: function (info) {
-        if (!info) return;
-        const pct = Math.max(1, Math.min(99, Math.round(Number(info.pct) || 0)));
-        const phase = info.phase === 'detect' ? 'detect' : 'transcribe';
-        workPhase = phase;
-        workBasePct = pct;
-        workExpectMs = 0;
-        setReadyState('loading');
-        if (phase === 'detect') {
-          setLoadProgress(pct, 'מזהה שפה');
-          setStatus('מזהה שפה…');
-          return;
-        }
-        const done = Math.min(Number(info.part) || 0, Number(info.total) || 0);
-        const total = Number(info.total) || 1;
-        setLoadProgress(pct, 'מתמלל ' + done + '/' + total);
-        setStatus('מתמלל… ' + pct + '% · מקטע ' + done + '/' + total);
-      }
+      sourceLang: srcSel
     });
   }
 
@@ -868,7 +860,12 @@
       labLog('audio frames=' + audio.length + ' dur=' + audioSec.toFixed(2) + 's');
       // Whisper base on WASM is often ~2–6× realtime; soft ETA for the progress bar.
       const expectMs = Math.max(8000, Math.round(audioSec * 3500));
-      setWorkPhase('transcribe', 18, expectMs);
+      setWorkPhase('transcribe', 15, expectMs);
+      if (el.readyDotFloat) el.readyDotFloat.setAttribute('data-busy', '1');
+      if (el.readyProgress) {
+        el.readyProgress.hidden = false;
+        el.readyProgress.textContent = '…';
+      }
       setStatus('מתמלל… · ' + audioSec.toFixed(0) + 'ש׳ אודיו');
       const result = await transcribeAudio(audio);
       lastFullText = String((result && result.text) || '').trim();

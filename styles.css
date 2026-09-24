@@ -954,9 +954,21 @@ body {
   animation: none;
 }
 
+.ready-dot-float[data-state="loading"][data-busy="1"],
+.ready-cluster .ready-dot-float[data-state="loading"][data-busy="1"] {
+  background: transparent;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  border-top-color: #f5a524;
+  animation: ready-spin-plain 0.75s linear infinite;
+}
+
 .ready-cluster .ready-dot-float[data-state="booting"],
 .ready-cluster .ready-dot-float[data-state="loading"] {
   animation: none;
+}
+
+.ready-cluster .ready-dot-float[data-state="loading"][data-busy="1"] {
+  animation: ready-spin-plain 0.75s linear infinite;
 }
 
 .ready-dot-float[data-state="ready"] {
