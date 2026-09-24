@@ -9,7 +9,7 @@
   let recognizer = null;
   let ensurePromise = null;
   let hfMod = null;
-  const MODEL = (global.CaptionsPolicy && global.CaptionsPolicy.whisperModel) || 'Xenova/whisper-tiny';
+  const MODEL = (global.CaptionsPolicy && global.CaptionsPolicy.whisperModel) || 'Xenova/whisper-base';
 
   async function ensurePipeline(onProgress, onLog) {
     if (recognizer) return recognizer;

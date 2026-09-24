@@ -64,7 +64,7 @@
     nllbEnabled: false,
     sosWire: false,
     overlaySyncSource: 'video.currentTime',
-    whisperModel: 'Xenova/whisper-tiny',
+    whisperModel: 'Xenova/whisper-base',
     nllbModel: 'Xenova/nllb-200-distilled-600M',
     nllbCodes: NLLB,
     whisperLanguages: WHISPER_LANG,
